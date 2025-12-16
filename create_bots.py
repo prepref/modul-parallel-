@@ -1,13 +1,36 @@
 import asyncio
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters
 from typing import List
 
-BOT_TOKENS = [
-    "8579622285:AAFkGRmk0AFD--E2asE2EyKcy8H3LElcaOg",
-    "8353309117:AAEPO_oZ2xyjG342PgbvZCP4Pf_1JN4wzaw",
-    "7619920407:AAFyty2B1HgyXy2yWJ0_hCQvw-VU_73nOvk",
-]
+def load_bot_tokens() -> List[str]:
+    """
+    Загружает токены ботов из переменной окружения BOT_TOKENS.
+
+    Формат:
+      - значения разделяются запятой (,) и/или переводом строки
+      - пробелы вокруг токена игнорируются
+
+    Пример:
+      export BOT_TOKENS="123:AAA..., 456:BBB..."
+    """
+    raw = (os.getenv("BOT_TOKENS") or "").strip()
+    if not raw:
+        raise RuntimeError(
+            "Не найдены токены ботов. Задайте переменную окружения BOT_TOKENS "
+            "(токены через запятую) и повторите запуск."
+        )
+
+    tokens = [t.strip() for t in raw.replace("\n", ",").split(",") if t.strip()]
+    # Минимальная валидация: токен Telegram обычно имеет вид "<число>:<строка>"
+    bad = [t for t in tokens if ":" not in t or len(t) < 10]
+    if bad:
+        raise RuntimeError(
+            "Некорректный формат токенов в BOT_TOKENS: "
+            + ", ".join(repr(t) for t in bad)
+        )
+    return tokens
 
 work_channels: List = []
 
@@ -51,7 +74,7 @@ class WorkChannel:
 async def create_bots():
     global work_channels
     work_channels = []
-    for token in BOT_TOKENS:
+    for token in load_bot_tokens():
         ch = WorkChannel(token)
         await ch.initialize()
         work_channels.append(ch)
