@@ -2,6 +2,7 @@ import asyncio
 
 from app.config import load_bots_from_env
 from app.adapters.telegram import TelegramAdapter
+from app.adapters.email import EmailAdapter
 from app.redis.redis_queue import RedisQueue
 from app.core.logger import logger
 
@@ -37,6 +38,10 @@ async def main():
             adapter = TelegramAdapter(bot.token, redis)
             tasks.append(asyncio.create_task(adapter.start_polling()))
             logger.info(f"Запущен бот {bot.messenger}:{bot.token[:10]}...")
+        elif bot.messenger == "email":
+            adapter = EmailAdapter(bot.token, redis)
+            tasks.append(asyncio.create_task(adapter.start_polling()))
+            logger.info(f"Запущен бот {bot.messenger}:{bot.token[:15]}...")
         else:
             logger.warning(f"Мессенджер {bot.messenger} не поддерживается!")
     

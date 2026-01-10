@@ -1,12 +1,17 @@
 import asyncio
 import time
+import os
 
 from app.adapters.base import BaseAdapter
 from app.core.rate_limit import with_rate_limit
 from app.core.logger import logger
 
 from telegram import Bot
-from telegram.error import TelegramError
+from telegram.error import TelegramError, RetryAfter, TimedOut
+
+# Семафор
+MAX_CONCURRENT_CONNECTIONS = int(os.getenv("MAX_CONCURRENT_CONNECTIONS", "25"))
+_connection_semaphore = asyncio.Semaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
 class TelegramAdapter(BaseAdapter):
@@ -28,16 +33,17 @@ class TelegramAdapter(BaseAdapter):
 
         while True:
             timeout = int(self.get_dynamic_timeout())
-            try: 
-                # Применяем rate limiting к запросу get_updates
-                updates = await with_rate_limit(
-                    self.bot.get_updates(
-                        offset=self.offset,
-                        timeout=timeout,
-                        limit=100
-                    ),
-                    token=self.token
-                )
+            try:
+                # Ограничиваем одновременные соединения через семафор
+                async with _connection_semaphore:
+                    updates = await with_rate_limit(
+                        self.bot.get_updates(
+                            offset=self.offset,
+                            timeout=timeout,
+                            limit=100
+                        ),
+                        token=self.token
+                    )
 
                 if updates:
                     logger.info(f"Получено {len(updates)} обновлений для бота: {bot_id}...")
@@ -51,13 +57,18 @@ class TelegramAdapter(BaseAdapter):
                             "data": update.to_dict()
                         })
                         self.last_activity = time.monotonic()
-                        # Обновляем offset для следующего запроса
                         self.offset = update.update_id + 1
                     except Exception as e:
                         logger.error(f"Ошибка при публикации обновления {update.update_id} в Redis: {e}", exc_info=True)
-                        # Продолжаем обработку следующих обновлений
                         continue
         
+            except RetryAfter as e:
+                # Telegram просит подождать определённое время (429 Too Many Requests)
+                retry_after = e.retry_after + 1  # +1 секунда для надёжности
+                logger.warning(f"Rate limit для бота {bot_id}: ждём {retry_after} сек (RetryAfter)")
+                await asyncio.sleep(retry_after)
+            except TimedOut:
+                pass
             except TelegramError as e:
                 logger.error(f"Telegram API error для бота {bot_id}: {e}")
                 await asyncio.sleep(3)

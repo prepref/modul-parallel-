@@ -9,7 +9,7 @@ from pathlib import Path
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-MessengerType = Literal["telegram"]
+MessengerType = Literal["telegram", "email"]
 
 @dataclass
 class BotConfig:
@@ -20,7 +20,7 @@ def load_bots_from_env() -> List[BotConfig]:
     """
     Загружает список ботов из переменных окружения:
     BOT_1=telegram:1234567:ABC
-    BOT_2=email:imap:token
+    BOT_2=email:imap.gmail.com:993:user@gmail.com:password
     """
     bots = []
     for key, value in os.environ.items():

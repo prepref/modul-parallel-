@@ -15,6 +15,10 @@ class BaseAdapter(ABC):
         pass
 
     def get_dynamic_timeout(self) -> float:
+        """
+        Динамический timeout: чем дольше бот неактивен, тем больше timeout (до 60 сек).
+        При активности timeout минимален (1 сек) для быстрой реакции.
+        """
         idle_time = time.monotonic() - self.last_activity
-        timeout = max(1.0, min(30.0, idle_time))
+        timeout = max(1.0, min(60.0, idle_time))
         return round(timeout, 1)
